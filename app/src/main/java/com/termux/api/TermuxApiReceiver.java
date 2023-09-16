@@ -1,11 +1,15 @@
 package com.termux.api;
 
+import static com.termux.shared.termux.TermuxConstants.TERMUX_API_PACKAGE_NAME;
+
 import android.Manifest;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.net.Uri;
 import android.provider.Settings;
+import android.util.JsonWriter;
 import android.widget.Toast;
 
 import com.termux.api.apis.AudioAPI;
@@ -31,6 +35,7 @@ import com.termux.api.apis.NotificationAPI;
 import com.termux.api.apis.NotificationListAPI;
 import com.termux.api.apis.SAFAPI;
 import com.termux.api.apis.SensorAPI;
+import com.termux.api.apis.SettingsAPI;
 import com.termux.api.apis.ShareAPI;
 import com.termux.api.apis.SmsInboxAPI;
 import com.termux.api.apis.SmsSendAPI;
@@ -91,16 +96,22 @@ public class TermuxApiReceiver extends BroadcastReceiver {
                 BatteryStatusAPI.onReceive(this, context, intent);
                 break;
             case "Brightness":
-                if (!Settings.System.canWrite(context)) {
-                    TermuxApiPermissionActivity.checkAndRequestPermissions(context, intent, Manifest.permission.WRITE_SETTINGS);
-                    Toast.makeText(context, "Please enable permission for Termux:API", Toast.LENGTH_LONG).show();
-
-                    // user must enable WRITE_SETTINGS permission this special way
-                    Intent settingsIntent = new Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS);
-                    context.startActivity(settingsIntent);
-                    return;
+                if (Settings.System.canWrite(context)) {
+                    BrightnessAPI.onReceive(this, context, intent);
+                } else {
+                    ResultReturner.returnData(context, intent, new ResultReturner.ResultJsonWriter() {
+                        @Override
+                        public void writeJson(JsonWriter out) throws Exception {
+                            out.beginObject().name("error").value("please grant permission: android.permission.WRITE_SETTINGS to use this command.").endObject();
+                        }
+                    });
+                    Intent startIntent = new Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS)
+                            .setData(Uri.parse("package:"+TERMUX_API_PACKAGE_NAME))
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            .addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
+                            .addFlags(Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS);
+                    context.startActivity(startIntent);
                 }
-                BrightnessAPI.onReceive(this, context, intent);
                 break;
             case "CameraInfo":
                 CameraInfoAPI.onReceive(this, context, intent);
@@ -195,6 +206,24 @@ public class TermuxApiReceiver extends BroadcastReceiver {
                 break;
             case "Sensor":
                 SensorAPI.onReceive(context, intent);
+                break;
+            case "SettingsAPI":
+                if (Settings.System.canWrite(context)) {
+                    SettingsAPI.onReceive(context, intent);
+                } else {
+                    ResultReturner.returnData(context, intent, new ResultReturner.ResultJsonWriter() {
+                        @Override
+                        public void writeJson(JsonWriter out) throws Exception {
+                            out.beginObject().name("error").value("please grant permission: android.permission.WRITE_SETTINGS to use this command.").endObject();
+                        }
+                    });
+                    Intent startIntent = new Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS)
+                            .setData(Uri.parse("package:"+TERMUX_API_PACKAGE_NAME))
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            .addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
+                            .addFlags(Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS);
+                    context.startActivity(startIntent);
+                }
                 break;
             case "Share":
                 ShareAPI.onReceive(this, context, intent);
